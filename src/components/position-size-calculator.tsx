@@ -481,10 +481,6 @@ export default function PositionSizeCalculator() {
     const nextRatio = ratio as TakeProfitRatio;
     setTakeProfitRatio(nextRatio);
 
-    if (!isTakeProfitLocked) {
-      return;
-    }
-
     const distance = Math.abs(form.entryPrice - form.stopLossPrice);
 
     if (!Number.isFinite(distance) || distance <= 0) {
@@ -628,7 +624,7 @@ export default function PositionSizeCalculator() {
                       type="number"
                       step={String(getPriceStep(form.symbol))}
                       value={form.stopLossPrice}
-                      onChange={(event) => handleInputChange("stopLossPrice", event.target.value)}
+                      onChange={(event) => updateStopLossPrice(Number(event.target.value))}
                       onKeyDown={(event) => {
                         if (!event.ctrlKey || (event.key !== "ArrowUp" && event.key !== "ArrowDown")) {
                           return;
