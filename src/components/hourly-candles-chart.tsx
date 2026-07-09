@@ -407,7 +407,7 @@ export function HourlyCandlesChart({
     ? "border-slate-600 bg-slate-950/90 text-slate-100 shadow-black/20"
     : "border-white/80 bg-white/90 text-slate-800 shadow-slate-200";
 
-  const lineBaseClass = "absolute inset-x-0 -translate-y-1/2 border-0 bg-transparent p-0 text-left";
+  const lineBaseClass = "absolute inset-x-0 h-12 -translate-y-1/2 border-0 bg-transparent p-0 text-left sm:h-9";
   const lineBandBaseClass = "absolute inset-x-0 top-1/2 h-px -translate-y-1/2";
 
   return (
