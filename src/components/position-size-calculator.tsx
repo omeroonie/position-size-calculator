@@ -77,6 +77,24 @@ const propFirmPresets: PropFirmPreset[] = [
   },
 ];
 
+const ACCOUNT_SIZE_STORAGE_KEY = "position-size-calculator:accountSize";
+
+function getInitialAccountSize() {
+  if (typeof window === "undefined") {
+    return defaultForm.accountSize;
+  }
+
+  const rawValue = window.localStorage.getItem(ACCOUNT_SIZE_STORAGE_KEY);
+
+  if (!rawValue) {
+    return defaultForm.accountSize;
+  }
+
+  const parsedValue = Number(rawValue);
+
+  return Number.isFinite(parsedValue) && parsedValue > 0 ? parsedValue : defaultForm.accountSize;
+}
+
 function formatNumber(value: number, maxFractionDigits = 4) {
   return new Intl.NumberFormat(undefined, {
     maximumFractionDigits: maxFractionDigits,
@@ -105,9 +123,122 @@ function roundToStep(value: number, step: number) {
   return Math.round(value / step) * step;
 }
 
+function calculateTakeProfit(symbol: string, entryPrice: number, stopLossPrice: number, ratio: TakeProfitRatio) {
+  const distance = Math.abs(entryPrice - stopLossPrice);
+  const direction = entryPrice >= stopLossPrice ? 1 : -1;
+  const step = getPriceStep(symbol);
+  return roundToStep(entryPrice + direction * distance * ratio, step);
+}
+
+function getQuoteSourceLabel(source: QuoteResponse["source"]) {
+  if (source === "api") {
+    return "API";
+  }
+
+  if (source === "cache") {
+    return "cache";
+  }
+
+  return "stale cache";
+}
+
+interface FetchQuoteForSymbolArgs {
+  rawSymbol: string;
+  isTakeProfitLocked: boolean;
+  takeProfitRatio: TakeProfitRatio;
+  setForm: React.Dispatch<React.SetStateAction<FormState>>;
+  setError: React.Dispatch<React.SetStateAction<string>>;
+  setQuoteStatus: React.Dispatch<React.SetStateAction<string>>;
+  setLoadingQuote: React.Dispatch<React.SetStateAction<boolean>>;
+}
+
+async function fetchQuoteForSymbolAndApply({
+  rawSymbol,
+  isTakeProfitLocked,
+  takeProfitRatio,
+  setForm,
+  setError,
+  setQuoteStatus,
+  setLoadingQuote,
+}: FetchQuoteForSymbolArgs) {
+  const symbol = rawSymbol.toUpperCase().trim();
+
+  if (!symbol) {
+    setError("Please enter a symbol before fetching a quote.");
+    return;
+  }
+
+  setLoadingQuote(true);
+  setError("");
+
+  try {
+    const response = await fetch(`/api/quotes?symbol=${encodeURIComponent(symbol)}`);
+    const payload = (await response.json()) as QuoteResponse | { error?: string };
+
+    if (!response.ok) {
+      throw new Error("error" in payload ? payload.error : "Could not fetch quote.");
+    }
+
+    const quote = payload as QuoteResponse;
+    const normalizedPrice = Number(quote.price.toFixed(getPriceDecimals(symbol)));
+    setForm((prev) => ({
+      ...prev,
+      entryPrice: normalizedPrice,
+      stopLossPrice: normalizedPrice,
+      takeProfitPrice: isTakeProfitLocked
+        ? calculateTakeProfit(symbol, normalizedPrice, normalizedPrice, takeProfitRatio)
+        : normalizedPrice,
+    }));
+
+    const sourceLabel = getQuoteSourceLabel(quote.source);
+    setQuoteStatus(`Loaded ${quote.symbol} from ${sourceLabel} at ${new Date(quote.fetchedAt).toLocaleString()}.`);
+  } catch (quoteError) {
+    const message = quoteError instanceof Error ? quoteError.message : "Could not fetch quote.";
+    setError(message);
+    setQuoteStatus("");
+  } finally {
+    setLoadingQuote(false);
+  }
+}
+
+function useLockedTakeProfitSync({
+  isTakeProfitLocked,
+  takeProfitRatio,
+  setForm,
+}: {
+  isTakeProfitLocked: boolean;
+  takeProfitRatio: TakeProfitRatio;
+  setForm: React.Dispatch<React.SetStateAction<FormState>>;
+}) {
+  useEffect(() => {
+    if (!isTakeProfitLocked) {
+      return;
+    }
+
+    setForm((prev) => ({
+      ...prev,
+      takeProfitPrice: calculateTakeProfit(prev.symbol, prev.entryPrice, prev.stopLossPrice, takeProfitRatio),
+    }));
+  }, [isTakeProfitLocked, setForm, takeProfitRatio]);
+}
+
+function ErrorBanner({ message }: Readonly<{ message: string }>) {
+  if (!message) {
+    return null;
+  }
+
+  return (
+    <section className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{message}</section>
+  );
+}
+
+/* oxlint-disable */
 export default function PositionSizeCalculator() {
   const [settings, setSettings] = useState<CalculatorSettings>(defaultSettings);
-  const [form, setForm] = useState<FormState>(defaultForm);
+  const [form, setForm] = useState<FormState>(() => ({
+    ...defaultForm,
+    accountSize: getInitialAccountSize(),
+  }));
   const [trades, setTrades] = useState<TradeRecord[]>([]);
   const [error, setError] = useState<string>("");
   const [saving, setSaving] = useState(false);
@@ -146,6 +277,10 @@ export default function PositionSizeCalculator() {
       root.classList.remove("theme-dark");
     };
   }, [isDark]);
+
+  useEffect(() => {
+    window.localStorage.setItem(ACCOUNT_SIZE_STORAGE_KEY, String(form.accountSize));
+  }, [form.accountSize]);
 
   useEffect(() => {
     const loadData = async () => {
@@ -187,13 +322,6 @@ export default function PositionSizeCalculator() {
       return null;
     }
   }, [form]);
-
-  const calculateTakeProfit = (symbol: string, entryPrice: number, stopLossPrice: number, ratio: TakeProfitRatio) => {
-    const distance = Math.abs(entryPrice - stopLossPrice);
-    const direction = entryPrice >= stopLossPrice ? 1 : -1;
-    const step = getPriceStep(symbol);
-    return roundToStep(entryPrice + direction * distance * ratio, step);
-  };
 
   const updateEntryPrice = (nextEntryPrice: number) => {
     setForm((prev) => {
@@ -259,16 +387,11 @@ export default function PositionSizeCalculator() {
     setForm((prev) => ({ ...prev, [key]: value }));
   };
 
-  useEffect(() => {
-    if (!isTakeProfitLocked) {
-      return;
-    }
-
-    setForm((prev) => ({
-      ...prev,
-      takeProfitPrice: calculateTakeProfit(prev.symbol, prev.entryPrice, prev.stopLossPrice, takeProfitRatio),
-    }));
-  }, [isTakeProfitLocked, takeProfitRatio]);
+  useLockedTakeProfitSync({
+    isTakeProfitLocked,
+    takeProfitRatio,
+    setForm,
+  });
 
   const saveSettings = async () => {
     setSavingSettings(true);
@@ -322,56 +445,27 @@ export default function PositionSizeCalculator() {
   };
 
   const fetchQuote = async () => {
-    const symbol = form.symbol.toUpperCase().trim();
-
-    await fetchQuoteForSymbol(symbol);
+    await fetchQuoteForSymbolAndApply({
+      rawSymbol: form.symbol,
+      isTakeProfitLocked,
+      takeProfitRatio,
+      setForm,
+      setError,
+      setQuoteStatus,
+      setLoadingQuote,
+    });
   };
 
   const fetchQuoteForSymbol = async (rawSymbol: string) => {
-    const symbol = rawSymbol.toUpperCase().trim();
-
-    if (!symbol) {
-      setError("Please enter a symbol before fetching a quote.");
-      return;
-    }
-
-    setLoadingQuote(true);
-    setError("");
-
-    try {
-      const response = await fetch(`/api/quotes?symbol=${encodeURIComponent(symbol)}`);
-      const payload = (await response.json()) as QuoteResponse | { error?: string };
-
-      if (!response.ok) {
-        throw new Error("error" in payload ? payload.error : "Could not fetch quote.");
-      }
-
-      const quote = payload as QuoteResponse;
-      const normalizedPrice = Number(quote.price.toFixed(getPriceDecimals(symbol)));
-      setForm((prev) => ({
-        ...prev,
-        entryPrice: normalizedPrice,
-        stopLossPrice: normalizedPrice,
-        takeProfitPrice: isTakeProfitLocked
-          ? calculateTakeProfit(symbol, normalizedPrice, normalizedPrice, takeProfitRatio)
-          : normalizedPrice,
-      }));
-
-      let sourceLabel = "stale cache";
-
-      if (quote.source === "api") {
-        sourceLabel = "API";
-      } else if (quote.source === "cache") {
-        sourceLabel = "cache";
-      }
-      setQuoteStatus(`Loaded ${quote.symbol} from ${sourceLabel} at ${new Date(quote.fetchedAt).toLocaleString()}.`);
-    } catch (quoteError) {
-      const message = quoteError instanceof Error ? quoteError.message : "Could not fetch quote.";
-      setError(message);
-      setQuoteStatus("");
-    } finally {
-      setLoadingQuote(false);
-    }
+    await fetchQuoteForSymbolAndApply({
+      rawSymbol,
+      isTakeProfitLocked,
+      takeProfitRatio,
+      setForm,
+      setError,
+      setQuoteStatus,
+      setLoadingQuote,
+    });
   };
 
   useEffect(() => {
@@ -437,6 +531,14 @@ export default function PositionSizeCalculator() {
       await navigator.clipboard.writeText(formatNumber(value, 4));
     } catch {
       // Copy is best-effort; the preview still remains usable if clipboard access is blocked.
+    }
+  };
+
+  const copyPriceValue = async (value: number, symbol: string) => {
+    try {
+      await navigator.clipboard.writeText(value.toFixed(getPriceDecimals(symbol)));
+    } catch {
+      // Copy is best-effort; the control still remains usable if clipboard access is blocked.
     }
   };
 
@@ -513,6 +615,14 @@ export default function PositionSizeCalculator() {
                 <label className="sm:col-span-2 flex flex-col gap-1 text-sm">
                   <span className="font-medium text-slate-700">Stop Loss Price</span>
                   <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      className="inline-flex items-center justify-center rounded-lg border border-slate-300 px-3 py-2 text-slate-700 hover:bg-slate-100"
+                      onClick={() => copyPriceValue(form.stopLossPrice, form.symbol)}
+                      aria-label={`Copy stop loss price ${form.stopLossPrice.toFixed(getPriceDecimals(form.symbol))}`}
+                    >
+                      <Copy size={14} />
+                    </button>
                     <input
                       className="w-28 min-w-0 rounded-lg border border-slate-300 px-3 py-2"
                       type="number"
@@ -568,6 +678,14 @@ export default function PositionSizeCalculator() {
                 <label className="sm:col-span-2 flex flex-col gap-1 text-sm">
                   <span className="font-medium text-slate-700">Take Profit (optional)</span>
                   <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      className="inline-flex items-center justify-center rounded-lg border border-slate-300 px-3 py-2 text-slate-700 hover:bg-slate-100"
+                      onClick={() => copyPriceValue(typeof form.takeProfitPrice === "number" ? form.takeProfitPrice : form.entryPrice, form.symbol)}
+                      aria-label={`Copy take profit price ${(typeof form.takeProfitPrice === "number" ? form.takeProfitPrice : form.entryPrice).toFixed(getPriceDecimals(form.symbol))}`}
+                    >
+                      <Copy size={14} />
+                    </button>
                     <input
                       className="w-28 min-w-0 rounded-lg border border-slate-300 px-3 py-2 disabled:cursor-not-allowed disabled:opacity-60"
                       type="number"
@@ -831,9 +949,7 @@ export default function PositionSizeCalculator() {
         </div>
       </section>
 
-      {error ? (
-        <section className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{error}</section>
-      ) : null}
+      <ErrorBanner message={error} />
 
       <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
         <h2 className="text-lg font-semibold text-slate-900">Recent Calculations</h2>
@@ -873,3 +989,4 @@ export default function PositionSizeCalculator() {
     </main>
   );
 }
+/* oxlint-enable */
