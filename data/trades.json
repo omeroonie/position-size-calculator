@@ -1,0 +1,19 @@
+[
+  {
+    "id": "895a9160-0101-4b8d-a0e4-34aef21b1da5",
+    "createdAt": "2026-07-09T07:02:11.089Z",
+    "symbol": "EURUSD",
+    "accountSize": 10000,
+    "riskPercent": 1,
+    "entryPrice": 1.14137,
+    "stopLossPrice": 1.1399100000000002,
+    "takeProfitPrice": 1.14413,
+    "pointValuePerLot": 100000,
+    "lotSizeUnits": 100000,
+    "stopDistance": 0.0014599999999997948,
+    "riskAmount": 100,
+    "positionSizeLots": 0.6849315068494113,
+    "positionSizeUnits": 68493.15068494112,
+    "notes": ""
+  }
+]

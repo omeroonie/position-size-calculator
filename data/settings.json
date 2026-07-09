@@ -1,0 +1,5 @@
+{
+  "accountCurrency": "USD",
+  "defaultRiskPercent": 1,
+  "maxOpenRiskPercent": 5
+}
