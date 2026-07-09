@@ -18,6 +18,7 @@ interface HourlyCandlesChartProps {
   entryPrice: number;
   stopLossPrice: number;
   takeProfitPrice: number;
+  onEntryChange: (price: number) => void;
   onStopLossChange: (price: number) => void;
   onTakeProfitChange: (price: number) => void;
 }
@@ -61,6 +62,7 @@ export function HourlyCandlesChart({
   entryPrice,
   stopLossPrice,
   takeProfitPrice,
+  onEntryChange,
   onStopLossChange,
   onTakeProfitChange,
 }: HourlyCandlesChartProps) {
@@ -68,7 +70,8 @@ export function HourlyCandlesChart({
   const chartMountRef = useRef<HTMLDivElement | null>(null);
   const chartRef = useRef<IChartApi | null>(null);
   const seriesRef = useRef<ISeriesApi<"Candlestick"> | null>(null);
-  const dragTargetRef = useRef<"sl" | "tp" | null>(null);
+  const dragTargetRef = useRef<"entry" | "sl" | "tp" | null>(null);
+  const onEntryChangeRef = useRef(onEntryChange);
   const stopLossPriceRef = useRef(stopLossPrice);
   const takeProfitPriceRef = useRef(takeProfitPrice);
   const onStopLossChangeRef = useRef(onStopLossChange);
@@ -88,6 +91,10 @@ export function HourlyCandlesChart({
   const normalizedSymbol = useMemo(() => symbol.toUpperCase().trim(), [symbol]);
   const priceStep = useMemo(() => getPriceStep(normalizedSymbol), [normalizedSymbol]);
   const priceDigits = normalizedSymbol.endsWith("JPY") ? 3 : 5;
+
+  useEffect(() => {
+    onEntryChangeRef.current = onEntryChange;
+  }, [onEntryChange]);
 
   useEffect(() => {
     stopLossPriceRef.current = stopLossPrice;
@@ -306,7 +313,7 @@ export function HourlyCandlesChart({
     return typeof coordinate === "number" && Number.isFinite(coordinate) ? coordinate : null;
   };
 
-  const startDrag = (target: "sl" | "tp", event: ReactPointerEvent<HTMLButtonElement>) => {
+  const startDrag = (target: "entry" | "sl" | "tp", event: ReactPointerEvent<HTMLButtonElement>) => {
     if (target === "tp" && isTakeProfitLocked) {
       return;
     }
@@ -332,7 +339,7 @@ export function HourlyCandlesChart({
     event.stopPropagation();
   };
 
-  const applyDragPrice = (target: "sl" | "tp", clientY: number) => {
+  const applyDragPrice = (target: "entry" | "sl" | "tp", clientY: number) => {
     const container = containerRef.current;
     const series = seriesRef.current;
 
@@ -349,6 +356,11 @@ export function HourlyCandlesChart({
     }
 
     const nextPrice = roundToStep(price, priceStep);
+
+    if (target === "entry") {
+      onEntryChangeRef.current(nextPrice);
+      return;
+    }
 
     if (target === "sl") {
       onStopLossChangeRef.current(nextPrice);
@@ -410,20 +422,27 @@ export function HourlyCandlesChart({
       {status ? <p className="mt-3 text-xs text-slate-500">{status}</p> : null}
       {loading ? <p className="mt-3 text-sm text-slate-500">Loading candles...</p> : null}
       <p className="mt-2 text-xs text-slate-500">
-        Drag the SL and TP handles over the chart. TP follows SL automatically while locked.
+        Drag the Entry, SL, and TP handles over the chart. TP follows SL automatically while locked.
       </p>
 
       <div ref={containerRef} className="relative mt-4 h-[320px] w-full overflow-hidden rounded-lg border border-slate-200">
         <div ref={chartMountRef} className="absolute inset-0 z-0" />
         <div className="pointer-events-none absolute inset-0 z-10">
           {entryY !== null ? (
-            <div className="absolute inset-x-0" style={{ top: `${entryY}px` }}>
-              <div className={lineBandBaseClass} style={{ backgroundColor: "rgba(148,163,184,0.95)", boxShadow: "0 0 0 1px rgba(255,255,255,0.7)" }} />
-              <div className="absolute left-3 top-1/2 flex -translate-y-1/2 items-center gap-2 rounded-full border border-slate-300 bg-slate-100/90 px-3 py-1 text-[11px] font-semibold text-slate-600 shadow-sm">
+            <button
+              type="button"
+              className={`${lineBaseClass} cursor-ns-resize text-left`}
+              style={{ top: `${entryY}px`, pointerEvents: "auto" }}
+              onPointerDown={(event) => startDrag("entry", event)}
+              aria-label={`Adjust entry price to ${entryPrice.toFixed(priceDigits)}`}
+            >
+              <span className={lineBandBaseClass} style={{ backgroundColor: "rgba(148,163,184,0.95)", boxShadow: "0 0 0 1px rgba(255,255,255,0.7)" }} />
+              <span className="absolute left-3 top-1/2 flex -translate-y-1/2 items-center gap-2 rounded-full border border-slate-300 bg-slate-100/90 px-3 py-1 text-[11px] font-semibold text-slate-600 shadow-sm">
                 <span>Entry</span>
                 <span className={priceChipClass}>{entryPrice.toFixed(priceDigits)}</span>
-              </div>
-            </div>
+                <span className="h-2.5 w-2.5 rounded-full bg-slate-500 shadow-sm" />
+              </span>
+            </button>
           ) : null}
 
           {stopLossY !== null ? (

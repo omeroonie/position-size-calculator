@@ -195,6 +195,21 @@ export default function PositionSizeCalculator() {
     return roundToStep(entryPrice + direction * distance * ratio, step);
   };
 
+  const updateEntryPrice = (nextEntryPrice: number) => {
+    setForm((prev) => {
+      const nextForm: FormState = {
+        ...prev,
+        entryPrice: nextEntryPrice,
+      };
+
+      if (isTakeProfitLocked) {
+        nextForm.takeProfitPrice = calculateTakeProfit(prev.symbol, nextEntryPrice, prev.stopLossPrice, takeProfitRatio);
+      }
+
+      return nextForm;
+    });
+  };
+
   const updateStopLossPrice = (nextStopLossPrice: number) => {
     setForm((prev) => {
       const nextForm: FormState = {
@@ -491,7 +506,7 @@ export default function PositionSizeCalculator() {
                     type="number"
                     step={String(getPriceStep(form.symbol))}
                     value={form.entryPrice}
-                    onChange={(event) => handleInputChange("entryPrice", event.target.value)}
+                    onChange={(event) => updateEntryPrice(Number(event.target.value))}
                   />
                 </label>
 
@@ -761,6 +776,7 @@ export default function PositionSizeCalculator() {
             entryPrice={form.entryPrice}
             stopLossPrice={form.stopLossPrice}
             takeProfitPrice={typeof form.takeProfitPrice === "number" ? form.takeProfitPrice : form.entryPrice}
+            onEntryChange={updateEntryPrice}
             onStopLossChange={updateStopLossPrice}
             onTakeProfitChange={updateTakeProfitPrice}
           />
