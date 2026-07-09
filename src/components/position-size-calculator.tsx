@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type * as React from "react";
 
 import { calculatePositionSize } from "@/lib/position-size";
@@ -9,6 +9,7 @@ import { CurrencyPairAutocomplete } from "@/components/currency-pair-autocomplet
 import type { QuoteResponse } from "@/types/quotes";
 import { AccountSizeDropdown } from "@/components/account-size-dropdown";
 import { HourlyCandlesChart } from "@/components/hourly-candles-chart";
+import { Copy } from "lucide-react";
 
 interface FormState {
   symbol: string;
@@ -117,6 +118,7 @@ export default function PositionSizeCalculator() {
   const [isDark, setIsDark] = useState(false);
   const [isTakeProfitLocked, setIsTakeProfitLocked] = useState(false);
   const [takeProfitRatio, setTakeProfitRatio] = useState<TakeProfitRatio>(1);
+  const didHydrateInitialQuoteRef = useRef(false);
 
   useEffect(() => {
     const savedTheme = window.localStorage.getItem("theme");
@@ -356,6 +358,15 @@ export default function PositionSizeCalculator() {
       setLoadingQuote(false);
     }
   };
+
+  useEffect(() => {
+    if (didHydrateInitialQuoteRef.current) {
+      return;
+    }
+
+    didHydrateInitialQuoteRef.current = true;
+    void fetchQuoteForSymbol(form.symbol);
+  }, [form.symbol]);
 
   const setTakeProfitByRatio = (ratio: number) => {
     const nextRatio = ratio as TakeProfitRatio;
@@ -698,14 +709,15 @@ export default function PositionSizeCalculator() {
                   </div>
                   <div className="flex items-center justify-between gap-4 font-semibold text-slate-900">
                     <dt>Position Size (Lots)</dt>
-                    <dd className="flex items-center gap-2">
-                      <span>{formatNumber(preview.positionSizeLots, 4)}</span>
+                    <dd>
                       <button
                         type="button"
-                        className="rounded-md border border-slate-300 px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-100"
+                        className="inline-flex items-center gap-2 rounded-md border border-slate-300 px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-100"
                         onClick={() => copyPositionSizeLots(preview.positionSizeLots)}
+                        aria-label={`Copy position size lots ${formatNumber(preview.positionSizeLots, 4)}`}
                       >
-                        Copy
+                        <Copy size={14} />
+                        <span>{formatNumber(preview.positionSizeLots, 4)}</span>
                       </button>
                     </dd>
                   </div>
