@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { readJsonFile, writeJsonFile } from "@/lib/json-store";
+import { getYahooTickerOverride } from "@/lib/market-symbols";
 import type { Candle, CandleCache, CandlesResponse } from "@/types/candles";
 
 export const runtime = "nodejs";
@@ -11,10 +12,16 @@ const MAX_CANDLE_WINDOW_MS = 3 * 24 * 60 * 60 * 1000;
 const MAX_CANDLES = 72;
 
 function normalizeSymbol(symbol: string | null): string {
-  return (symbol ?? "").toUpperCase().replace(/[^A-Z=]/g, "").trim();
+  return (symbol ?? "").toUpperCase().replace(/[^A-Z0-9=]/g, "").trim();
 }
 
 function toYahooSymbol(symbol: string): string {
+  const override = getYahooTickerOverride(symbol);
+
+  if (override) {
+    return override;
+  }
+
   if (symbol.endsWith("=X")) {
     return symbol;
   }

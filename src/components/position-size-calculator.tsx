@@ -101,8 +101,19 @@ function formatNumber(value: number, maxFractionDigits = 4) {
   }).format(value);
 }
 
+const INDEX_SYMBOLS = new Set(["US500", "US100", "US30"]);
+const OIL_SYMBOLS = new Set(["XTIUSD"]);
+
 function getPipSize(symbol: string) {
   const normalizedSymbol = symbol.toUpperCase().trim();
+
+  if (INDEX_SYMBOLS.has(normalizedSymbol)) {
+    return 1;
+  }
+
+  if (OIL_SYMBOLS.has(normalizedSymbol)) {
+    return 0.01;
+  }
 
   if (normalizedSymbol.endsWith("JPY")) {
     return 0.01;
@@ -116,7 +127,13 @@ function getPriceStep(symbol: string) {
 }
 
 function getPriceDecimals(symbol: string) {
-  return symbol.toUpperCase().trim().endsWith("JPY") ? 3 : 5;
+  const normalizedSymbol = symbol.toUpperCase().trim();
+
+  if (INDEX_SYMBOLS.has(normalizedSymbol) || OIL_SYMBOLS.has(normalizedSymbol)) {
+    return 2;
+  }
+
+  return normalizedSymbol.endsWith("JPY") ? 3 : 5;
 }
 
 function roundToStep(value: number, step: number) {

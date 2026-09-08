@@ -23,5 +23,9 @@ export const currencyPairs = [
   "NZDCAD",
   "NZDCHF",
   "XAUUSD",
-  "XAGUSD"
+  "XAGUSD",
+  "XTIUSD",
+  "US500",
+  "US100",
+  "US30"
 ] as const;
