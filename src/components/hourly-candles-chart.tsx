@@ -65,7 +65,7 @@ export function HourlyCandlesChart({
   onEntryChange,
   onStopLossChange,
   onTakeProfitChange,
-}: HourlyCandlesChartProps) {
+}: Readonly<HourlyCandlesChartProps>) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const chartMountRef = useRef<HTMLDivElement | null>(null);
   const chartRef = useRef<IChartApi | null>(null);
@@ -247,12 +247,13 @@ export function HourlyCandlesChart({
         const candlesPayload = payload as CandlesResponse;
         setCandles(toChartData(candlesPayload));
 
-        const sourceLabel =
-          candlesPayload.source === "api"
-            ? "API"
-            : candlesPayload.source === "cache"
-              ? "cache"
-              : "stale cache";
+        let sourceLabel = "stale cache";
+
+        if (candlesPayload.source === "api") {
+          sourceLabel = "API";
+        } else if (candlesPayload.source === "cache") {
+          sourceLabel = "cache";
+        }
 
         setStatus(`1h candles from ${sourceLabel} at ${new Date(candlesPayload.fetchedAt).toLocaleString()}`);
       } catch (chartError) {
@@ -425,7 +426,7 @@ export function HourlyCandlesChart({
         Drag the Entry, SL, and TP handles over the chart. TP follows SL automatically while locked.
       </p>
 
-      <div ref={containerRef} className="relative mt-4 h-[320px] w-full overflow-hidden rounded-lg border border-slate-200">
+      <div ref={containerRef} className="relative mt-4 h-80 w-full overflow-hidden rounded-lg border border-slate-200">
         <div ref={chartMountRef} className="absolute inset-0 z-0" />
         <div className="pointer-events-none absolute inset-0 z-10">
           {entryY !== null ? (

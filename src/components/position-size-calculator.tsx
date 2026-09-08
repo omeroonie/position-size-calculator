@@ -130,6 +130,26 @@ function calculateTakeProfit(symbol: string, entryPrice: number, stopLossPrice: 
   return roundToStep(entryPrice + direction * distance * ratio, step);
 }
 
+function getQuoteCurrencyCode(symbol: string): string | null {
+  const normalizedSymbol = symbol.toUpperCase().trim();
+  return normalizedSymbol.length === 6 ? normalizedSymbol.slice(3, 6) : null;
+}
+
+async function fetchConversionRate(fromCurrency: string, toCurrency: string): Promise<number> {
+  if (fromCurrency === toCurrency) {
+    return 1;
+  }
+
+  const response = await fetch(`/api/quotes?symbol=${encodeURIComponent(`${fromCurrency}${toCurrency}`)}`);
+  const payload = (await response.json()) as QuoteResponse | { error?: string };
+
+  if (!response.ok) {
+    throw new Error("error" in payload ? payload.error : "Could not fetch conversion rate.");
+  }
+
+  return (payload as QuoteResponse).price;
+}
+
 function getQuoteSourceLabel(source: QuoteResponse["source"]) {
   if (source === "api") {
     return "API";
@@ -307,6 +327,34 @@ export default function PositionSizeCalculator() {
 
     void loadData();
   }, []);
+
+  useEffect(() => {
+    const quoteCurrency = getQuoteCurrencyCode(form.symbol);
+
+    if (!quoteCurrency) {
+      return;
+    }
+
+    let cancelled = false;
+
+    const syncPointValue = async () => {
+      try {
+        const rate = await fetchConversionRate(quoteCurrency, settings.accountCurrency);
+
+        if (!cancelled) {
+          setForm((prev) => ({ ...prev, pointValuePerLot: prev.lotSizeUnits * rate }));
+        }
+      } catch {
+        // Keep the existing point value if the conversion rate can't be fetched.
+      }
+    };
+
+    void syncPointValue();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [form.symbol, form.lotSizeUnits, settings.accountCurrency]);
 
   const preview = useMemo(() => {
     try {
